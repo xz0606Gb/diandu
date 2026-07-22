@@ -1,0 +1,250 @@
+# 点读课本生成器（diandu-ocr）
+这是一个基于英语电子版教材生成点读课本的skill
+
+把**扫描版或电子版英语课本 PDF** 做成**自包含网页点读器**：每一页可点击听读、带中文翻译、支持英文/中文 TTS。
+配套 **words_reader（单词学习）**，通过点读课本首页的「📚 单词学习」入口打开（点读 / 听写 / 闪卡三模式）。
+
+本目录就是一个**完整可分享的项目模板**：解压后即为你的项目根目录，按下面步骤放好 PDF 即可用。
+
+---
+
+## 1. 特性
+
+- 扫描版 PDF → 网页点读器，逐行/逐热区点击听读（英文 `edge-tts` 神经语音）。
+- 手动画框定义点读区（热区），支持导出/导入 `regions.json`，草稿存 `localStorage`。
+- 中文翻译回填（你写 `translator.md`，脚本按归一化英文自动匹配，无需逐字对齐）。
+- 整页连读、语速调节（0.5×–2×）、显示文字/中文开关、封面单元导航。
+- 合并所有单元 + 封面 → 一个连续大阅读器 `book_reader/`。
+- **单词学习 words_reader**：点读 / 听写 / 闪卡，通过 iframe 与书本脚本隔离，零冲突。
+- 纯静态产物，可本地 `file://` 打开，也可托管到任意静态网站。
+
+---
+
+## 2. 环境依赖
+
+### 2.1 Python（核心生成，必须）
+
+- **Python 3.10+**（建议 3.11 / 3.12）。**不需要 tesseract**——OCR 用的是 RapidOCR（自带 onnx 模型，首次运行会联网下载）。
+- 安装依赖：
+  ```bash
+  pip install pymupdf rapidocr_onnxruntime edge-tts numpy
+  ```
+  | 包 | 用途 |
+  |---|---|
+  | `pymupdf` (fitz) | 把 PDF 每页渲染成 PNG |
+  | `rapidocr_onnxruntime` | 行级 OCR（识别文字 + 坐标），无需外部引擎 |
+  | `edge_tts` | 微软神经语音 TTS（**生成语音需联网**） |
+  | `numpy` | 图像处理辅助 |
+
+  > ⚠️ `edge_tts` 与 RapidOCR 首次下载模型/语音都**需要访问网络**。
+
+### 2.2 Node.js（单词学习 words_reader 数据生成，可选）
+
+- **Node.js 18+**：运行 `words_reader/parse.js`，把词库 `words_table.MD` 转成 `words_reader/data.js`。
+- words_reader 的单词语音同样用 `edge-tts`（Python 脚本）生成。
+
+### 2.3 浏览器
+
+- 现代浏览器（Chrome / Edge / Safari 16+）：用于手绘点读区、试听与最终阅读。界面用到了 `backdrop-filter`，旧版浏览器样式会略有降级但不影响功能。
+
+---
+
+## 3. 目录结构
+
+解压后的项目根目录：
+
+```
+diandu-ocr-skill/
+├── .claude/skills/diandu-ocr/SKILL.md   # Claude Code skill：让 Claude 按本流程自动生成
+├── build_reader.py        # 单单元生成：PDF → {ID}_reader/
+├── make_audio.py          # 把手绘点读区 regions.json 烘焙成音频并写回 data.js
+├── fill_translations.py   # 把 {ID}translator.md 的中文填进 data.js
+├── merge_reader.py        # 合并所有单元 + 封面 + words_reader → book_reader/
+├── index.html             # 增强版前端模板（merge 源，会被拷贝进各产物）
+├── app.js                 # 增强版前端模板（同上）
+├── words_table.MD         # 【示例词库】单词学习词表（表格格式，见第 7 节）
+├── words_reader/          # 单词学习模块源码
+│   ├── parse.js           # Node: 把 words_table.MD 编译成 data.js（你换词表后重跑）
+│   ├── generate_audio.py  # Python: 根据 data.js 生成单词语音 audio/{i}.mp3
+│   ├── index.html         # 单词学习页面（点读 / 听写 / 闪卡）
+│   ├── app.js             # 单词学习脚本
+│   └── style.css          # 单词学习样式
+├── unit1.pdf … unit6.pdf  # ← 你放自己的课本 PDF（本模板不含）
+├── contents.pdf / tips.pdf# ← 可选：目录页 / 知识贴士页 PDF
+└── 封面.jpg               # ← 可选：课本封面图（merge 会复制进 book_reader）
+```
+
+> ⚠️ 本包**不包含** `words_reader/data.js` 和 `words_reader/audio/`——它们是你的词表和语音产物，**需要你用你的单词表自行生成**（见第 7 节）。这样换课本、换词表时无需动源码，重跑两行命令就行。
+
+> 说明：脚本与前端模板都在项目根。`book_reader/`、`unit{N}_reader/` 等产物目录由脚本生成，
+> 解压时不存在，运行后自动出现。**直接改 `book_reader/` 里的前端文件会在下次 `merge_reader.py` 时被覆盖**——
+> 要改前端请改根目录的 `index.html` / `app.js`（这同时影响各 `unitN_reader/`）。
+
+---
+
+## 4. 快速开始
+
+```bash
+# 0) 安装依赖（见第 2 节）
+pip install pymupdf rapidocr_onnxruntime edge-tts numpy
+
+# 1) 把你的课本 PDF 放进项目根：unit1.pdf … unit6.pdf（contents.pdf / tips.pdf 可选）
+
+# 2) 逐单元生成（Claude 或命令行）
+python build_reader.py 1
+python build_reader.py 2
+# … 直到 unit6
+
+# 3) 浏览器打开 unit1_reader/index.html → 点「✎ 编辑点读区」拖框 → 导出 regions.json
+#    写 unit1translator.md（英文 → 中文，每行一条）
+
+# 4) 烘焙音频 + 回填中文
+python make_audio.py 1
+python fill_translations.py 1
+# … 每个单元重复 3–4 步
+
+# 5) 汇总成整本书（含单词学习模块）
+python merge_reader.py
+# 打开 book_reader/index.html 即可阅读
+```
+
+---
+
+## 5. 完整流程（按单元号 N）
+
+### 第 1 步：基础生成（Claude / 命令行执行）
+```bash
+python build_reader.py N          # 处理 unit{N}.pdf → unit{N}_reader/
+python build_reader.py contents    # 处理 contents.pdf → contents_reader/（任意标识都行）
+```
+产出 `unit{N}_reader/`：`pages/*.png` + `audio/*.mp3`（自动分句朗读）+ `data.js` + 复制进来的前端 `index.html`/`app.js`。
+- 耗时较长（整页 OCR + 逐句 TTS），需联网，建议后台跑。
+- 换嗓音：`VOICE=en-GB-RyanNeural python build_reader.py N`（中文行用 `CN_VOICE=...`）。
+
+### 第 2 步：用户手动画点读区（浏览器）
+打开 `unit{N}_reader/index.html` → 点 **✎ 编辑点读区** → 在页面上拖拽画框定义点读区（框内英文自动填入）→ 点 **⬇ 导出**，把 `regions.json` 存进 `unit{N}_reader/`。
+
+### 第 3 步：用户写翻译文件
+新建 `unit{N}translator.md`，每行一条：
+```
+英文原文 → 中文翻译
+```
+- 译注用全角（）包裹，如 `Albert loves football. → 阿尔伯特热爱足球。（原文无空格）`，脚本会自动剥离（）内译注。
+- 空行 / 无 `→` 的行忽略。OCR 常把词连写（`SchoolGlubs`/`Footballclub`），脚本用**归一化英文**（去空格/标点/小写）匹配，无需手动对齐。
+
+### 第 4 步：烘焙音频 + 回填中文（Claude / 命令行执行）
+把 `regions.json` 放进 `unit{N}_reader/` 并写好 `unit{N}translator.md` 后：
+```bash
+python make_audio.py N          # 按 regions.json 逐热区生成 audio/region_*.mp3，写回 data.js
+python fill_translations.py N   # 匹配 translator.md，填所有 regions[].cn 和 line.cn，并嵌成 BOOK.translations
+```
+- `make_audio.py` 有 3 次失败重试；`fill_translations.py` 按归一化英文匹配，并把整本词典嵌入 `BOOK.translations`（供编辑器画新框时自动联想中文）。
+
+### 第 5 步：验收
+刷新 `unit{N}_reader/index.html`，勾选 **显示中文** 查看；**整页连读** 也会显示中文。
+若某点读区没中文，多为：① 空框（框内无文字）；② OCR 英文与翻译文件写法差太多。把没翻的英文原文加进 `translator.md` 再跑一次 `fill_translations.py N`。
+
+---
+
+## 6. 合并成整本书 book_reader
+
+所有单元生成并校对完后，合并为一个连续大阅读器：
+```bash
+python merge_reader.py
+```
+- 按书本顺序拼接 `contents → unit1~6 → tips` 的 `pages` 与 `audio`（资源加单元前缀重命名、路径重写）。
+- 合并各单元 `translations` 词典，生成导航 `BOOK.nav`（目录 / Unit 1~6 / 知识贴士）。
+- 复制封面 `封面.jpg`（若项目根有）进 `book_reader/`。
+- **把整个 `words_reader/` 复制进 `book_reader/words_reader/`**（单词学习模块自包含，无需额外配置）。
+- 打开：`book_reader/index.html`。
+
+---
+
+## 7. 单词学习 words_reader（使用你自己的词表）
+
+词库源是项目根目录的 `words_table.MD`（已附带一份示例），格式如下：
+
+```markdown
+| 英文 | 音标 | 中文 | 页码 | 单元 |
+|------|------|------|------|------|
+| apple | /ˈæp.əl/ | 苹果 | 1 | 1 |
+| banana | /bəˈnæn.ə/ | 香蕉 | 2 | 1 |
+```
+
+换成你自己的单词后，依次运行：
+
+```bash
+node words_reader/parse.js              # 生成 words_reader/data.js（从 words_table.MD 编译）
+python words_reader/generate_audio.py   # 生成 words_reader/audio/{i}.mp3（需联网下载 TTS）
+```
+
+打开 `words_reader/index.html` 可独立使用（点读 / 听写 / 闪卡三模式）。
+在 `book_reader` 中，首页封面导航有高亮的 **📚 单词学习** 入口，工具条也有 **📚 单词** 按钮，通过 iframe 加载
+**`words_reader/index.html`（相对子目录路径）**——两套脚本 iframe 隔离，不会冲突。
+
+> **关键**：`words_reader/data.js` 和 `words_reader/audio/` 是**你的词表的产物**，不随包提供。
+> 。换课本时只需改项目根的 `words_table.MD`，重跑上述两行命令即可，无需动 words_reader 源码。
+
+---
+
+## 8. 部署到网站（重要）
+
+`book_reader/` 是**自包含**的静态站点，直接整目录托管即可。
+
+- **把 `book_reader/` 整个目录上传**，内含的 `words_reader/` 子文件夹**必须一起带上**。
+  线上 `https://你的站点/words_reader/index.html` 必须能直接打开。
+- **绝不能用 `../words_reader/`**：一旦把 `book_reader` 作为网站根目录部署，`../` 会逸出 web 根 → `404 NOT_FOUND`。
+  当前代码用的是相对子目录路径 `words_reader/index.html`，在 `file://`、本地 `http://`、任意托管下行为一致。
+- 若封面点「单词学习」打不开：先确认部署包里 `book_reader/words_reader/index.html` 是否在（漏传子目录是最常见的坑）。
+
+---
+
+## 9. book_reader 前端界面速览
+
+- **工具条**：🏠 封面、‹ 上一页 / 下一页 ›、▶ 整页连读、■ 停止、✎ 编辑点读区、📚 单词、显示文字开关、显示中文开关、语速滑块（0.5×–2×）。
+- **点读**：点页面任意区域听读；键盘 **←/→** 翻页，**空格** 整页连读。
+- **编辑模式**：拖拽画框定义点读区；导出/导入 `regions.json`；草稿暂存于浏览器 `localStorage`。
+- **封面导航**：点单元直接跳转；含「单词学习」入口。
+- **移动端 / 横屏**：页面按宽度自适应（纵向滚动，无横向拖动）。
+
+---
+
+## 10. 常见问题 / 踩坑
+
+- **合并会覆盖前端**：`book_reader/index.html` / `app.js` 由 `merge_reader.py` 从**根目录模板**拷贝。若改了 `book_reader/` 的前端想保留，需同步根目录的 `index.html` / `app.js`（这同时也会影响各 `unitN_reader/`）。
+- **OCR 连写匹配**：`fill_translations.py` 用归一化英文匹配，`translator.md` 无需逐字对齐。
+- **某区域没中文**：空框，或 OCR 英文与翻译写法差异过大 → 把原文加进 `translator.md` 重跑 `fill_translations.py N`。
+- **edge_tts 失败**：检查网络；`make_audio.py` 已内置 3 次重试。
+- **RapidOCR 首次慢**：首次运行会下载 onnx 模型，后续走本地缓存。
+- **单词学习 404 / 打不开**：见第 8 节——几乎都是部署时漏传 `book_reader/words_reader/` 子目录，或旧代码用了 `../words_reader/`。确保上传完整 `book_reader/`。
+- **单词学习页面空白**：见第 7 节——你是否跑了 `node words_reader/parse.js` 生成 `data.js`？如果 `data.js` 不存在或内容为空，单词册无法加载。换词表后务必重跑。
+
+---
+
+## 11. 一句话命令速查
+
+```bash
+# 环境
+pip install pymupdf rapidocr_onnxruntime edge-tts numpy
+
+# 单单元全流程
+python build_reader.py N
+#  （浏览器画点读区 → 导出 regions.json；写 unitNtranslator.md）
+python make_audio.py N
+python fill_translations.py N
+
+# 汇总成书（含单词学习模块）
+python merge_reader.py
+
+# 单词学习（用你自己的 words_table.MD）
+node words_reader/parse.js
+python words_reader/generate_audio.py
+```
+
+---
+
+## 12. 用 Claude Code skill 自动生成
+
+本包自带 `.claude/skills/diandu-ocr/SKILL.md`。在支持 Claude Code skill 的环境里，把它所在的
+`.claude/skills/diandu-ocr/` 放到你的项目 `.claude/skills/` 下，然后对话中说"生成 unitN 点读课本 /
+做点读课本"等，Claude 会按上述流程调动脚本完成生成、合并与部署检查。

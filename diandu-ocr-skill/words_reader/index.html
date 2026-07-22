@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>单词学习 · 点读 / 听写 / 闪卡</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <span class="logo">📚</span>
+      <span>单词学习</span>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-mode="study" class="active">点读学习</button>
+      <button data-mode="dictation">听写</button>
+      <button data-mode="flashcard">闪卡</button>
+    </nav>
+    <button class="mobile-filter-toggle" id="mobileFilterToggle">☰ 筛选</button>
+  </header>
+
+  <div class="layout">
+    <!-- Sidebar: filters + selection -->
+    <aside class="sidebar" id="sidebar">
+      <button class="sidebar-close" id="sidebarClose" aria-label="关闭">✕</button>
+      <div class="filter-block">
+        <div class="filter-title">单元</div>
+        <div class="chips" id="unitChips"></div>
+      </div>
+      <div class="sel-actions">
+        <button class="btn" id="selAll">全选筛选结果</button>
+        <button class="btn" id="selClear">清空选择</button>
+      </div>
+      <div class="sel-count" id="selCount">已选 0 个</div>
+      <div class="candidate-list" id="candidateList"></div>
+    </aside>
+
+    <div class="scrim" id="scrim"></div>
+
+    <main class="main">
+      <!-- Study / click-to-read -->
+      <section id="view-study" class="view active">
+        <div class="view-toolbar">
+          <div class="view-title">已选单词<span id="studyCount"></span></div>
+          <div class="toolbar-actions">
+            <button class="btn" id="toggleAllTrans">显示全部释义</button>
+            <button class="btn primary" id="readAll">朗读全部</button>
+          </div>
+        </div>
+        <div class="card-grid" id="studyGrid"></div>
+      </section>
+
+      <!-- Dictation -->
+      <section id="view-dictation" class="view">
+        <div class="dictation-panel">
+          <p class="hint">将依次朗读所选单词：每个单词以 <b>0.75 倍速</b> 朗读 <b>2 遍</b>，两遍之间间隔 <b>1 秒</b>，相邻两个单词之间间隔 <b>3 秒</b>。请边听边写。全部播放完成后，下方会列出所有单词及释义供核对。</p>
+          <div class="dictation-controls">
+            <button class="btn primary" id="startDict">开始听写</button>
+            <button class="btn" id="stopDict" disabled>停止</button>
+          </div>
+          <div class="dictation-status" id="dictStatus">未开始</div>
+          <div class="progress-bar"><div class="progress-fill" id="dictFill"></div></div>
+          <div class="review" id="dictReview"></div>
+        </div>
+      </section>
+
+      <!-- Flashcard -->
+      <section id="view-flashcard" class="view">
+        <div class="fc-toolbar">
+          <div class="fc-mode" id="fcMode">
+            <button data-fc="en" class="active">英文 → 中文</button>
+            <button data-fc="zh">中文 → 英文</button>
+          </div>
+          <div class="fc-actions">
+            <button class="btn" id="fcShuffle">打乱顺序</button>
+            <button class="btn primary" id="fcRead">朗读</button>
+          </div>
+        </div>
+        <div class="fc-stage">
+          <div class="fc-card" id="fcCard">
+            <div class="fc-inner">
+              <div class="fc-face fc-front">
+                <div class="fc-label" id="fcFrontLabel">英文</div>
+                <div class="fc-main" id="fcFrontMain"></div>
+                <div class="fc-sub" id="fcFrontSub"></div>
+              </div>
+              <div class="fc-face fc-back">
+                <div class="fc-label" id="fcBackLabel">中文</div>
+                <div class="fc-main" id="fcBackMain"></div>
+                <div class="fc-sub" id="fcBackSub"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="fc-nav">
+          <button class="btn" id="fcPrev">← 上一个</button>
+          <div class="fc-counter" id="fcCounter"></div>
+          <button class="btn" id="fcNext">下一个 →</button>
+        </div>
+        <p class="fc-hint">点击卡片翻转 · 使用键盘 ← → 切换</p>
+      </section>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

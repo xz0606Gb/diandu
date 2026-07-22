@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
+  <title>点读课本</title>
+  <style>
+  :root {
+    --bg: #f4f5fb;
+    --surface: #ffffff;
+    --surface-2: #f8f9fd;
+    --primary: #5b5bd6;
+    --primary-2: #7c6cf0;
+    --primary-soft: #eceaff;
+    --text: #1f2330;
+    --muted: #8a8fa3;
+    --border: #e9ebf3;
+    --green: #18a058;
+    --shadow: 0 6px 24px rgba(40, 44, 92, 0.08);
+    --shadow-sm: 0 2px 8px rgba(40, 44, 92, 0.06);
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+    overflow-x: clip;            /* 禁止横向溢出 → 不会出现横向拖动 */
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+  /* ---------- 顶部工具条 ---------- */
+  #bar {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 12px 18px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; }
+  .brand .logo {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    display: grid; place-items: center; color: #fff; font-size: 16px;
+  }
+  .bar-group { display: flex; align-items: center; gap: 8px; }
+  .nav-group { gap: 6px; }
+  .spacer { flex: 1; }
+
+  /* 通用按钮 */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 14px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    transition: all 0.15s ease; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--primary-2); color: var(--primary); }
+  .btn:active { transform: scale(0.97); }
+  .btn.primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    border: none; color: #fff; box-shadow: 0 4px 14px rgba(91, 91, 214, 0.32);
+  }
+  .btn.primary:hover { filter: brightness(1.05); color: #fff; }
+  .btn.active {
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    border: none; color: #fff; box-shadow: 0 4px 14px rgba(91, 91, 214, 0.32);
+  }
+
+  /* 翻页按钮（药丸形） */
+  .nav-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 9px 16px; border-radius: 999px;
+    font-size: 14px; font-weight: 600;
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    transition: all 0.15s ease; white-space: nowrap;
+  }
+  .nav-btn:hover { border-color: var(--primary-2); color: var(--primary); }
+  .nav-btn:active { transform: scale(0.97); }
+
+  #pageinfo {
+    font-size: 14px; font-weight: 700; color: var(--muted);
+    min-width: 64px; text-align: center; padding: 6px 12px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
+  }
+
+  /* 开关滑块（显示文字 / 显示中文） */
+  .switch {
+    position: relative; display: inline-flex; align-items: center; gap: 8px;
+    font-size: 14px; cursor: pointer; user-select: none;
+  }
+  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .switch .track {
+    width: 42px; height: 24px; border-radius: 999px;
+    background: var(--border); position: relative;
+    transition: background 0.2s ease; flex: 0 0 auto;
+  }
+  .switch .track::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform 0.2s ease;
+  }
+  .switch input:checked + .track { background: linear-gradient(135deg, var(--primary), var(--primary-2)); }
+  .switch input:checked + .track::after { transform: translateX(18px); }
+  .switch .lbl { font-weight: 600; color: var(--muted); transition: color 0.2s ease; }
+  .switch input:checked ~ .lbl { color: var(--primary); }
+
+  /* 语速滑块 */
+  .rate-wrap { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; }
+  .rate-wrap > label { font-weight: 600; color: var(--muted); }
+  .rate-wrap input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 120px; height: 6px; border-radius: 999px;
+    background: var(--border); outline: none; cursor: pointer;
+  }
+  .rate-wrap input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    box-shadow: 0 2px 6px rgba(91,91,214,.4); cursor: pointer;
+  }
+  .rate-wrap input[type=range]::-moz-range-thumb {
+    width: 18px; height: 18px; border: none; border-radius: 50%;
+    background: var(--primary); box-shadow: 0 2px 6px rgba(91,91,214,.4); cursor: pointer;
+  }
+  .rate-val {
+    min-width: 44px; text-align: right; font-weight: 700; color: var(--primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- 阅读区 ---------- */
+  #stage { margin: 18px auto; max-width: 920px; padding: 0 12px; }
+  body.editmode #stage { margin-right: 340px; }
+  .pagewrap { position: relative; line-height: 0; }
+  .pagewrap img { width: 100%; max-width: 100%; height: auto; display: block; border-radius: 12px;
+    box-shadow: 0 6px 28px rgba(40, 44, 92, 0.16); background: #fff; }
+  .hit { position: absolute; cursor: pointer; border-radius: 6px;
+    transition: background .08s; }
+  .hit:hover { background: rgba(255, 213, 79, .30); }
+  .hit.active { background: rgba(255, 167, 38, .55); }
+  .hit .txt { line-height: 1.3; font-size: 13px; color: #1f2430;
+    background: rgba(255,255,255,.92); padding: 3px 6px; border-radius: 6px;
+    position: absolute; left: 0; top: 100%; margin-top: 2px; white-space: normal;
+    max-width: min(380px, 90vw); word-break: break-word;
+    display: none; pointer-events: none; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+  body.showtext .hit .txt, body.showcn .hit .txt { display: block; }
+  .hit .txt .en { display: none; }
+  body.showtext .hit .txt .en { display: block; }
+  .hit .txt .cn { display: none; color: var(--green); margin-top: 1px; font-weight: 600; }
+  body.showcn .hit .txt .cn { display: block; }
+  body.editmode .hit { pointer-events: none; }
+
+  /* ---------- 编辑模式 ---------- */
+  #editor { position: fixed; top: 61px; right: 0; width: 320px; height: calc(100% - 61px);
+    background: var(--surface); border-left: 1px solid var(--border); padding: 14px;
+    box-sizing: border-box; overflow: auto; display: none; z-index: 20; font-size: 13px;
+    box-shadow: -6px 0 24px rgba(40,44,92,.08); }
+  body.editmode #editor { display: block; }
+  #editor h3 { margin: 2px 0 8px; font-size: 14px; }
+  #editor .hint2 { color: var(--muted); font-size: 12px; line-height: 1.6; margin-bottom: 8px; }
+  #regionText, #regionCn { width: 100%; box-sizing: border-box; background: var(--surface-2);
+    color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+    font-size: 13px; resize: vertical; font-family: inherit; }
+  #regionText { height: 96px; }
+  #regionCn { height: 70px; margin-top: 6px; }
+  #regionText:focus, #regionCn:focus { outline: none; border-color: var(--primary-2);
+    box-shadow: 0 0 0 3px var(--primary-soft); }
+  #editor .row { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+  #editor button { background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 11px; font-size: 13px; cursor: pointer; transition: all .15s ease; }
+  #editor button:hover { border-color: var(--primary-2); color: var(--primary); }
+  #editor button:active { transform: scale(0.97); }
+  #editor button.danger { background: #fdecec; border-color: #f3c2c2; color: #c0392b; }
+  #editor button.danger:hover { background: #f9d9d9; color: #a93226; }
+  #editor button:disabled { opacity: .45; cursor: default; }
+  #regionList { list-style: none; padding: 0; margin: 8px 0; max-height: 28%; overflow: auto; }
+  #regionList li { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 5px; font-size: 12px; cursor: pointer; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; transition: all .15s ease; }
+  #regionList li:hover { border-color: var(--primary-2); }
+  #regionList li.sel { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+  #draw { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    cursor: crosshair; touch-action: none; }
+  body:not(.editmode) #draw { display: none; }
+  .ero { position: absolute; border: 2px dashed var(--primary); background: rgba(91,91,214,.10);
+    box-sizing: border-box; cursor: pointer; border-radius: 4px; }
+  .ero.draft { border-style: solid; background: rgba(91,91,214,.20); }
+  .ero.sel { border-color: var(--green); background: rgba(24,160,88,.18); }
+  body:not(.editmode) .ero { display: none; }
+  #hint { text-align: center; color: var(--muted); font-size: 13px; padding: 8px 0 28px; }
+
+  /* ---------- 封面 + 引导 ---------- */
+  #cover { position: fixed; inset: 0; z-index: 30; display: flex;
+    align-items: center; justify-content: center; padding: 16px;
+    background: rgba(22, 24, 44, 0.92); }
+  #cover.hidden { display: none; }
+  #coverCard { max-width: 92vw; max-height: 94vh; overflow: auto; display: flex;
+    flex-direction: column; align-items: center; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 18px; padding: 18px 20px;
+    box-shadow: 0 12px 50px rgba(20,22,40,.35); }
+  #coverImg { max-width: 100%; max-height: 58vh; border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.15); display: block; background: #fff; }
+  #navgrid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 16px; }
+  .navbtn { background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 999px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: all .15s ease; }
+  .navbtn:hover { border-color: var(--primary-2); color: var(--primary);
+    background: var(--primary-soft); }
+  .navbtn:active { transform: scale(0.97); }
+  .coverhint { color: var(--muted); font-size: 12px; margin-top: 14px; text-align: center; }
+
+  /* 封面索引里的「单词学习」入口：突出显示 */
+  .navbtn.words-entry {
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    border: none; color: #fff; box-shadow: 0 4px 14px rgba(91, 91, 214, 0.32);
+  }
+  .navbtn.words-entry:hover { filter: brightness(1.05); color: #fff; }
+
+  /* ---------- 单词学习覆盖层 ---------- */
+  #wordsLayer { position: fixed; inset: 0; z-index: 40; background: var(--surface); }
+  #wordsLayer.hidden { display: none; }
+  #wordsFrame { width: 100%; height: 100%; border: 0; display: block; }
+  .words-close {
+    position: fixed; top: 12px; right: 12px; z-index: 41;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: rgba(31, 35, 48, 0.78); color: #fff; font-size: 18px;
+    display: grid; place-items: center; backdrop-filter: blur(4px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); transition: transform 0.12s ease;
+  }
+  .words-close:hover { background: rgba(31, 35, 48, 0.92); }
+  .words-close:active { transform: scale(0.94); }
+
+  /* ---------- 移动端 / 平板 ---------- */
+  @media (max-width: 820px) {
+    #bar { padding: 9px 12px; gap: 7px; }
+    .brand span:last-child { display: none; }
+    .nav-btn { padding: 8px 12px; font-size: 13px; }
+    .btn { padding: 8px 11px; font-size: 12px; }
+    .switch { font-size: 13px; }
+    .switch .track { width: 38px; height: 22px; }
+    .switch .track::after { width: 16px; height: 16px; top: 2px; left: 2px; }
+    .switch input:checked + .track::after { transform: translateX(16px); }
+    .rate-wrap { font-size: 13px; gap: 7px; }
+    .rate-wrap input[type=range] { width: 88px; }
+    #stage { padding: 0 10px; margin: 12px auto; }
+    body.editmode #stage { margin-right: 0; }
+    #editor { width: 100%; top: auto; bottom: 0; height: 62%;
+      border-left: none; border-top: 1px solid var(--border); }
+  }
+
+  /* ---------- 横向（手机/平板横屏）：压缩工具条，把竖向空间留给阅读 ---------- */
+  @media (orientation: landscape) and (max-height: 520px) {
+    #bar { padding: 6px 10px; gap: 6px; }
+    .brand { display: none; }
+    .nav-btn, .btn { padding: 6px 10px; font-size: 12px; }
+    .switch { font-size: 12px; }
+    .rate-wrap input[type=range] { width: 76px; }
+    #stage { margin: 8px auto; padding: 0 10px; }
+    #hint { display: none; }
+  }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <div class="brand">
+      <span class="logo">📖</span><span>点读课本</span>
+    </div>
+
+    <div class="bar-group nav-group">
+      <button id="coverBtn" class="btn" title="封面">🏠 封面</button>
+      <button id="prev" class="nav-btn">‹ 上一页</button>
+      <span id="pageinfo">1 / 1</span>
+      <button id="next" class="nav-btn">下一页 ›</button>
+    </div>
+
+    <span class="spacer"></span>
+
+    <div class="bar-group">
+      <button id="playall" class="btn primary">▶ 整页连读</button>
+      <button id="stop" class="btn">■ 停止</button>
+      <button id="editBtn" class="btn">✎ 编辑点读区</button>
+      <button id="wordsBtn" class="btn" title="单词学习">📚 单词</button>
+      <button id="exportBtn" class="btn" style="display:none">⬇ 导出</button>
+      <button id="importBtn" class="btn" style="display:none">⬆ 导入</button>
+    </div>
+
+    <div class="bar-group">
+      <label class="switch">
+        <input type="checkbox" id="showtext">
+        <span class="track"></span><span class="lbl">显示文字</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="showcn">
+        <span class="track"></span><span class="lbl">显示中文</span>
+      </label>
+      <div class="rate-wrap">
+        <label for="rate">语速</label>
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+        <span class="rate-val" id="rateVal">1×</span>
+      </div>
+    </div>
+
+    <input type="file" id="importFile" accept="application/json" style="display:none">
+  </div>
+
+  <div id="cover" class="hidden">
+    <div id="coverCard">
+      <img id="coverImg" alt="封面">
+      <div id="navgrid"></div>
+      <div class="coverhint">点单元直接跳转 · 点空白处或按 Esc 关闭</div>
+    </div>
+  </div>
+
+  <div id="stage">
+    <div class="pagewrap" id="pagewrap">
+      <img id="pageimg" alt="page">
+    </div>
+  </div>
+
+  <div id="editor">
+    <h3>编辑点读区 · 第 <span id="edPage">1</span> 页</h3>
+    <div class="hint2">在页面上拖拽画一个框 = 一个朗读区。框内的文字会自动填入下方，可修改。点列表里的区域可重新选中编辑。</div>
+    <textarea id="regionText" placeholder="在此修改该点读区的朗读文字…"></textarea>
+    <div class="hint2" style="margin:6px 0 2px">中文翻译（可选）：</div>
+    <textarea id="regionCn" placeholder="在此填写该点读区的中文翻译…"></textarea>
+    <div class="row">
+      <button id="delBtn" class="danger">删除选中</button>
+      <button id="clearBtn" class="danger">清空本页</button>
+    </div>
+    <div class="hint2">画好所有区域后点「导出」保存 regions.json，再运行 make_audio.py 生成音频。</div>
+    <ul id="regionList"></ul>
+  </div>
+
+  <div id="hint">点击任意一行文字即可听读 · 左右键翻页</div>
+
+  <!-- 单词学习（words_reader）覆盖层：iframe 隔离，脚本与 book_reader 零冲突 -->
+  <div id="wordsLayer" class="hidden">
+    <button id="wordsClose" class="words-close" title="返回点读课本" aria-label="返回点读课本">✕</button>
+    <iframe id="wordsFrame" src="" title="单词学习" loading="lazy"></iframe>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
